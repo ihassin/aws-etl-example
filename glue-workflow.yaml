@@ -1,0 +1,349 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Creates a Glue Workflow, AWS Glue Crawler, Catalogue, ETL & Data quality jobs, Athena queries
+
+Parameters:
+  CityDataBucketName:
+    Type: String
+  CityDataPath:
+    Type: String
+    Default: "city-data"
+  CityDBName:
+    Type: String
+    Default: "city-data-db"
+  CityTableName:
+    Type: String
+    Default: "city_data"
+  CityDataProcessedTableName:
+    Type: String
+    Default: "city-data-processed"
+  ParquetPath:
+    Type: String
+    Default: "city_data.parquet"
+  CityDataFileName:
+    Type: String
+    Default: "CityData.csv"
+  CityDataETLScriptName:
+    Type: String
+    Default: "city_etl.py"
+  CityDataDQScriptName:
+    Type: String
+    Default: "city_dq.py"
+  CityDataProcessedPath:
+    Type: String
+    Default: "processed"
+  ScriptPath:
+    Type: String
+    Default: "scripts"
+
+Resources:
+  CityDataS3BucketName:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref CityDataBucketName
+      NotificationConfiguration:
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
+
+  CityDataGlueDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: !Ref CityDBName
+        Description: Database for the data
+
+  CityDataGlueCrawlerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: CityDataCrawlerRole
+      Description: Allows Crawler to manipulate the CityData objects
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: glue.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole
+      Policies:
+        - PolicyName: GlueCrawlerS3Access
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !GetAtt CityDataS3BucketName.Arn
+                  - !Sub "${CityDataS3BucketName.Arn}/*"
+
+  CityDataCSVClassifier:
+    Type: AWS::Glue::Classifier
+    Properties:
+      CsvClassifier:
+        Name: CityDataCSVClassifier
+        Delimiter: ","
+        QuoteSymbol: "\""
+        ContainsHeader: "PRESENT" # Other options: ABSENT, UNKNOWN
+        # Optional properties for specific scenarios
+        # AllowSingleColumn: true | false
+        # DisableGlobalHeaders: true | false
+        # HeaderDerivedCols: integer
+
+  CityDataGlueCrawler:
+    Type: AWS::Glue::Crawler
+    Properties:
+      Name: CityDataCrawler
+      Description: Crawler for City Data
+      Role: !GetAtt CityDataGlueCrawlerRole.Arn
+      DatabaseName: !Ref CityDataGlueDatabase
+      Classifiers:
+        - !Ref CityDataCSVClassifier
+      Targets:
+        S3Targets:
+          - Path: !Sub "${CityDataS3BucketName}/${CityDataPath}/"
+      SchemaChangePolicy:
+        UpdateBehavior: UPDATE_IN_DATABASE
+        DeleteBehavior: LOG
+
+  GlueETLJob:
+    Type: AWS::Glue::Job
+    Properties:
+      Name: CityDataETLJob
+      Description: "ETL Job to ingest city data and transform nulls to n/a"
+      Role: !GetAtt CityDataGlueCrawlerRole.Arn
+      GlueVersion: "5.0"
+      Command:
+        Name: glueetl
+        ScriptLocation: !Sub "s3://${CityDataS3BucketName}/${ScriptPath}/${CityDataETLScriptName}"
+        PythonVersion: "3.9"
+      DefaultArguments:
+        --job-bookmark-option: job-bookmark-enable
+        --TempDir: !Sub "s3://${CityDataS3BucketName}/temp/"
+        --enable-continuous-cloudwatch-log: "true"
+        "--BUCKET_NAME": !Sub "s3://${CityDataS3BucketName}"
+        "--DATA_FILE_LOCATION": !Ref CityDataPath
+        "--DATA_FILE_NAME": !Ref CityDataFileName
+        "--PROCESSED_DATA_LOCATION": !Ref CityDataProcessedPath
+        "--PARQUET_PATH": !Ref ParquetPath
+      ExecutionProperty:
+        MaxConcurrentRuns: 1
+      Timeout: 30
+      MaxRetries: 0
+      MaxCapacity: 1
+
+  GlueDataQualityJob:
+    Type: AWS::Glue::Job
+    Properties:
+      Name: CityDataQualityJob
+      Description: "ETL Job to assure that column values are not nulls"
+      Role: !GetAtt CityDataGlueCrawlerRole.Arn
+      GlueVersion: "5.0"
+      Command:
+        Name: glueetl
+        ScriptLocation: !Sub "s3://${CityDataS3BucketName}/${ScriptPath}/${CityDataDQScriptName}"
+      DefaultArguments:
+        --bucket_name: !Ref CityDataS3BucketName
+        --file_path: !Sub "${CityDataProcessedPath}/${ParquetPath}"
+        --enable-glue-data-quality: "true"
+
+  ProcessedCityDataGlueTable:
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref CityDataGlueDatabase
+      TableInput:
+        Name: !Ref CityDataProcessedTableName
+        TableType: EXTERNAL_TABLE
+        Parameters:
+          classification: parquet
+          EXTERNAL: true
+        StorageDescriptor:
+          Location: !Sub "s3://${CityDataS3BucketName}/${CityDataProcessedPath}/"
+          InputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat
+          OutputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat
+          Compressed: false
+          SerdeInfo:
+            SerializationLibrary: org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe
+          Columns:
+            - Name: id
+              Type: string
+            - Name: country
+              Type: string
+            - Name: state
+              Type: string
+            - Name: city
+              Type: string
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    DependsOn:
+      - CityDataWorkflow
+    Properties:
+      RoleName: lambda-glue-workflow-role
+      Description: Allow lambda to access Glue Workflow
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: allow-glue-workflow
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - glue:StartWorkflowRun
+                Resource: !Sub "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:workflow/${CityDataWorkflow}"
+
+  StartWorkflowLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: start-glue-workflow
+      Description: Lambda to initiate workflow
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+
+          glue = boto3.client("glue")
+
+          def lambda_handler(event, context):
+              print("Event:", event)
+              glue.start_workflow_run(
+                  Name=os.environ["WORKFLOW_NAME"]
+              )
+              return {"status": "started"}
+      Environment:
+        Variables:
+          WORKFLOW_NAME: !Ref CityDataWorkflow
+
+  CityDataWorkflow:
+    Type: AWS::Glue::Workflow
+    Properties:
+      Name: CityDataWorkflow
+      Description: Workflow to run CityData ETL and Data Quality jobs
+
+  S3EventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: CityDataUploadTrigger
+      Description: Trigger Glue workflow when data is uploaded to S3
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - Object Created
+        detail:
+          bucket:
+            name:
+              - !Ref CityDataBucketName
+          object:
+            key:
+              - prefix: !Sub "${CityDataPath}/"
+              - suffix: !Ref CityDataFileName
+          reason:
+            - PutObject
+            - CompleteMultipartUpload
+            - CopyObject
+
+      Targets:
+        - Arn: !GetAtt StartWorkflowLambda.Arn
+          Id: LambdaTarget
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref StartWorkflowLambda
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt S3EventRule.Arn
+
+  StartCityDataCrawlerTrigger:
+    Type: AWS::Glue::Trigger
+    Properties:
+      Name: StartCityDataCrawlerTrigger
+      Type: ON_DEMAND
+      WorkflowName: !Ref CityDataWorkflow
+      Actions:
+        - CrawlerName: !Ref CityDataGlueCrawler
+
+  StartCityDataETLJobTrigger:
+    Type: AWS::Glue::Trigger
+    Properties:
+      Name: StartCityDataPipelineTrigger
+      Description: Trigger to start the ETL script
+      Type: CONDITIONAL
+      StartOnCreation: true
+      WorkflowName: !Ref CityDataWorkflow
+      Predicate:
+        Logical: AND
+        Conditions:
+          - CrawlerName: !Ref CityDataGlueCrawler
+            CrawlState: SUCCEEDED
+            LogicalOperator: EQUALS
+      Actions:
+        - JobName: !Ref GlueETLJob
+
+  RunDataQualityTrigger:
+    Type: AWS::Glue::Trigger
+    DependsOn:
+      - StartCityDataETLJobTrigger
+    Properties:
+      Name: RunDataQualityTrigger
+      Description: Trigger to start Data Quality script after ETL script succeeds
+      Type: CONDITIONAL
+      StartOnCreation: true
+      WorkflowName: !Ref CityDataWorkflow
+      Predicate:
+        Logical: AND
+        Conditions:
+          - JobName: !Ref GlueETLJob
+            State: SUCCEEDED
+            LogicalOperator: EQUALS
+      Actions:
+        - JobName: !Ref GlueDataQualityJob
+          Arguments:
+            --JOB_NAME: "RunDataQualityTrigger"
+            --file_path: !Sub "${CityDataProcessedPath}/${ParquetPath}/"
+            --bucket_name: !Ref CityDataBucketName
+
+  ProcessedCityDataAthenaNamedQuery:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Name: "ReturnProcessedCities"
+      Description: "Return processed cities"
+      Database: !Ref CityDataGlueDatabase
+      QueryString: !Sub "SELECT * FROM \"${CityDataProcessedTableName}\";"
+      WorkGroup: "primary"
+
+  CityDataAthenaNamedQuery:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Name: "ReturnCities"
+      Description: "Return the cities"
+      Database: !Ref CityDataGlueDatabase
+      QueryString: !Sub "SELECT * FROM \"${CityTableName}\";"
+      WorkGroup: "primary"
+
+Outputs:
+  CrawlerName:
+    Value: !Ref CityDataGlueCrawler
+    Description: Name of the created Glue crawler
+
+  DatabaseName:
+    Value: !Ref CityDataGlueDatabase
+    Description: Name of the created database
