@@ -6,34 +6,24 @@ Parameters:
     Type: String
   CityDataPath:
     Type: String
-    Default: "city-data"
   CityDBName:
     Type: String
-    Default: "city-data-db"
   CityTableName:
     Type: String
-    Default: "city_data"
   CityDataProcessedTableName:
     Type: String
-    Default: "city-data-processed"
   ParquetPath:
     Type: String
-    Default: "city_data.parquet"
   CityDataFileName:
     Type: String
-    Default: "CityData.csv"
   CityDataETLScriptName:
     Type: String
-    Default: "city_etl.py"
   CityDataDQScriptName:
     Type: String
-    Default: "city_dq.py"
   CityDataProcessedPath:
     Type: String
-    Default: "processed"
   ScriptPath:
     Type: String
-    Default: "scripts"
 
 Resources:
   CityDataS3BucketName:
