@@ -22,7 +22,7 @@ aws_secret_access_key=DEF
 aws_session_token=GHI
 ```
 
-### AWS Region
+## AWS Region
 
 Your rc file, i.e. .zshrc, should contain an exported environment variable named `AWS_GLUE_EXAMPLE_REGION`. This variable's value is the AWS region name used to run the code.
 
@@ -31,6 +31,14 @@ For example:
 export AWS_GLUE_EXAMPLE_REGION=us-east-1
 ```
 
+## S3 Bucket name
+
+Your rc file, i.e. .zshrc, should contain an exported environment variable named `STAGING_BUCKET_NAME`. This variable's value is the name of the bucket that code and data will be using.
+
+For example:
+```shell
+export STAGING_BUCKET_NAME=com-yourcompany-bucket-name
+```
 
 # Running stuff
 
