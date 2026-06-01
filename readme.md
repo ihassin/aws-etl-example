@@ -44,15 +44,21 @@ export STAGING_BUCKET_NAME=com-yourcompany-bucket-name
 
 run `./workflow-create.sh` to create the workflow that will run when triggered.
 
-run `./workflow-feed.sh` that load data to S3, triggering the workflow.
+run `./workflow-feed.sh` that loads data to the `STAGING_BUCKET_NAME` S3 bucket, triggering the workflow.
 
 run `./workflow-delete.sh` to remove everything.
 
 # Verifying the work manually
 
-- Install `duckdb` using brew
+## Parquet files
+
+- Install duckdb using `brew install duckdb`
 - Download the parquet file from the curated folder in S3
 - Run the query: `duckdb -c "SELECT * FROM '~/Downloads/file.snappy.parquet';"`
+
+## Using Athena
+
+Run the Athena queries in 'Saved Queries' using the console
 
 
 # Technotes
