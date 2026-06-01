@@ -181,8 +181,6 @@ Resources:
 
   LambdaExecutionRole:
     Type: AWS::IAM::Role
-    DependsOn:
-      - CityDataWorkflow
     Properties:
       RoleName: lambda-glue-workflow-role
       Description: Allow lambda to access Glue Workflow
