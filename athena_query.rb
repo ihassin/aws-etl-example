@@ -7,32 +7,33 @@ require 'aws-sdk-cloudformation'
 require 'aws-sdk-athena'
 require 'terminal-table'
 
-REGION = 'us-east-1'
 STACK_NAME = 'glue-example-workflow'
-OUTPUT_KEY = 'AthenaProcessedCityDataQueryId'
-RESULTS_BUCKET = 's3://com-in-context-data-load-staging/athena/'
+QUERY_ID = 'AthenaProcessedCityDataQueryId'
+RESULTS_BUCKET = "s3://#{ENV['STAGING_BUCKET_NAME']}/athena/"
+
+def get_query_from_cloudformation(stack_name:, query_id:)
+  cf = Aws::CloudFormation::Client.new(profile: ENV['AWS_GLUE_EXAMPLE_PROFILE'], region: ENV['AWS_GLUE_EXAMPLE_REGION'])
+
+  stack = cf.describe_stacks(
+    stack_name: stack_name
+  ).stacks.first
+
+  query_id = stack.outputs
+                  .find { |o| o.output_key == query_id }
+               &.output_value
+end
 
 #
 # Get Athena Named Query ID from CloudFormation
 #
-cf = Aws::CloudFormation::Client.new(profile: 'TW', region: REGION)
+query_id = get_query_from_cloudformation(stack_name: STACK_NAME, query_id: QUERY_ID)
 
-stack = cf.describe_stacks(
-  stack_name: STACK_NAME
-).stacks.first
-
-query_id = stack.outputs
-                .find { |o| o.output_key == OUTPUT_KEY }
-             &.output_value
-
-raise "CloudFormation output '#{OUTPUT_KEY}' not found" unless query_id
-
-puts "Found Athena Query #{OUTPUT_KEY} with ID: #{query_id}"
+raise "CloudFormation output '#{QUERY_ID}' not found" unless query_id
 
 #
 # Retrieve the Named Query
 #
-athena = Aws::Athena::Client.new(profile: 'TW', region: REGION)
+athena = Aws::Athena::Client.new(profile: ENV['AWS_GLUE_EXAMPLE_PROFILE'], region: ENV['AWS_GLUE_EXAMPLE_REGION'])
 
 named_query = athena.get_named_query(
   named_query_id: query_id
