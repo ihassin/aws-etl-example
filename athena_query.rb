@@ -1,15 +1,13 @@
 #!/usr/bin/env ruby
-# # frozen_string_literal: true
-
+# frozen_string_literal: true
 require 'bundler/setup'
+require 'dotenv'
+Dotenv.load
 
 require 'aws-sdk-cloudformation'
 require 'aws-sdk-athena'
 require 'terminal-table'
 
-STACK_NAME = 'glue-example-workflow'
-PROCESSED_QUERY_ID = 'AthenaProcessedCityDataQueryId'
-RAW_QUERY_ID = 'AthenaOriginalCityDataQueryId'
 RESULTS_BUCKET = "s3://#{ENV['STAGING_BUCKET_NAME']}/athena/"
 
 def get_query_id_from_cloudformation(stack_name:, query_id:)
@@ -136,9 +134,9 @@ def display_results(table_rows:, named_query:)
 
 end
 
-table_rows, named_query = execute_query(stack_name: STACK_NAME, query_id: RAW_QUERY_ID)
+table_rows, named_query = execute_query(stack_name: ENV['STACK_NAME'], query_id: ENV['RAW_QUERY_ID'])
 display_results(table_rows: table_rows, named_query: named_query)
 
-table_rows, named_query = execute_query(stack_name: STACK_NAME, query_id: PROCESSED_QUERY_ID)
+table_rows, named_query = execute_query(stack_name: ENV['STACK_NAME'], query_id: ENV['PROCESSED_QUERY_ID'])
 display_results(table_rows: table_rows, named_query: named_query)
 
