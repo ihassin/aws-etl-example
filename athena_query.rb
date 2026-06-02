@@ -8,7 +8,8 @@ require 'aws-sdk-athena'
 require 'terminal-table'
 
 STACK_NAME = 'glue-example-workflow'
-QUERY_ID = 'AthenaProcessedCityDataQueryId'
+PROCESSED_QUERY_ID = 'AthenaProcessedCityDataQueryId'
+RAW_QUERY_ID = 'AthenaOriginalCityDataQueryId'
 RESULTS_BUCKET = "s3://#{ENV['STAGING_BUCKET_NAME']}/athena/"
 
 def get_query_id_from_cloudformation(stack_name:, query_id:)
@@ -25,9 +26,9 @@ end
 
 def execute_query(stack_name:, query_id:)
 
-  query_id = get_query_id_from_cloudformation(stack_name: STACK_NAME, query_id: QUERY_ID)
+  query_id = get_query_id_from_cloudformation(stack_name: stack_name, query_id: query_id)
 
-  raise "CloudFormation output '#{QUERY_ID}' not found" unless query_id
+  raise "CloudFormation output '#{query_id}' not found" unless query_id
 
   athena = Aws::Athena::Client.new(profile: ENV['AWS_GLUE_EXAMPLE_PROFILE'], region: ENV['AWS_GLUE_EXAMPLE_REGION'])
 
@@ -135,6 +136,9 @@ def display_results(table_rows:, named_query:)
 
 end
 
-table_rows, named_query = execute_query(stack_name: STACK_NAME, query_id: QUERY_ID)
+table_rows, named_query = execute_query(stack_name: STACK_NAME, query_id: RAW_QUERY_ID)
+display_results(table_rows: table_rows, named_query: named_query)
+
+table_rows, named_query = execute_query(stack_name: STACK_NAME, query_id: PROCESSED_QUERY_ID)
 display_results(table_rows: table_rows, named_query: named_query)
 
