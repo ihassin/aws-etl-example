@@ -1,18 +1,21 @@
-# frozen_string_literal: true
+#!/usr/bin/env ruby
+# # frozen_string_literal: true
+
+require 'bundler/setup'
 
 require 'aws-sdk-cloudformation'
 require 'aws-sdk-athena'
 require 'terminal-table'
 
 REGION = 'us-east-1'
-STACK_NAME = 'my-city-data-stack'
-OUTPUT_KEY = 'CityDataValidationQueryId'
-RESULTS_BUCKET = 's3://my-athena-results/results/'
+STACK_NAME = 'glue-example-workflow'
+OUTPUT_KEY = 'AthenaProcessedCityDataQueryId'
+RESULTS_BUCKET = 's3://com-in-context-data-load-staging/athena/'
 
 #
 # Get Athena Named Query ID from CloudFormation
 #
-cf = Aws::CloudFormation::Client.new(region: REGION)
+cf = Aws::CloudFormation::Client.new(profile: 'TW', region: REGION)
 
 stack = cf.describe_stacks(
   stack_name: STACK_NAME
@@ -24,12 +27,12 @@ query_id = stack.outputs
 
 raise "CloudFormation output '#{OUTPUT_KEY}' not found" unless query_id
 
-puts "Found Athena Named Query ID: #{query_id}"
+puts "Found Athena Query #{OUTPUT_KEY} with ID: #{query_id}"
 
 #
 # Retrieve the Named Query
 #
-athena = Aws::Athena::Client.new(region: REGION)
+athena = Aws::Athena::Client.new(profile: 'TW', region: REGION)
 
 named_query = athena.get_named_query(
   named_query_id: query_id

@@ -58,8 +58,8 @@ run `./workflow-delete.sh` to remove everything.
 
 ## Using Athena
 
-Run the Athena queries in 'Saved Queries' using the console
-
+- Run the Athena queries in 'Saved Queries' using the console
+- Run `./athena_query.rb` (after installing ruby and running `bundle`)
 
 # Technotes
 

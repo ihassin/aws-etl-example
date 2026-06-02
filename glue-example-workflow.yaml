@@ -328,6 +328,10 @@ Resources:
       WorkGroup: "primary"
 
 Outputs:
+  CityDataS3BucketName:
+    Value: !Ref CityDataS3BucketName
+    Description: The S3 bucket used for this example
+
   CrawlerName:
     Value: !Ref CityDataGlueCrawler
     Description: Name of the created Glue crawler
