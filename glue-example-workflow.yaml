@@ -335,3 +335,11 @@ Outputs:
   DatabaseName:
     Value: !Ref CityDataGlueDatabase
     Description: Name of the created database
+
+  AthenaProcessedCityDataQueryId:
+    Value: !Ref ProcessedCityDataAthenaNamedQuery
+    Description: Returns the data after transformation
+
+  AthenaOriginalCityDataQueryId:
+    Value: !Ref CityDataAthenaNamedQuery
+    Description: Returns the data prior to transformation
