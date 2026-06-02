@@ -81,10 +81,6 @@ def execute_query(stack_name:, query_id:)
     end
   end
 
-
-  #
-  # Retrieve all result pages
-  #
   rows = []
   next_token = nil
 
@@ -109,31 +105,36 @@ def execute_query(stack_name:, query_id:)
   [table_rows, named_query.name]
 end
 
+def display_results(table_rows:, named_query:)
+  if table_rows.empty?
+    puts 'No rows returned.'
+    exit
+  end
+
+  #
+  # Athena returns headers as the first row
+  #
+  headers = table_rows.first
+  data_rows = table_rows.drop(1)
+
+  #
+  # Special handling for single-value results
+  #
+  if headers.length == 1 && data_rows.length == 1
+    puts "\n#{headers.first}: #{data_rows.first.first}"
+  else
+    table = Terminal::Table.new(
+      title: named_query,
+      headings: headers,
+      rows: data_rows
+    )
+
+    puts
+    puts table
+  end
+
+end
+
 table_rows, named_query = execute_query(stack_name: STACK_NAME, query_id: QUERY_ID)
+display_results(table_rows: table_rows, named_query: named_query)
 
-if table_rows.empty?
-  puts 'No rows returned.'
-  exit
-end
-
-#
-# Athena returns headers as the first row
-#
-headers = table_rows.first
-data_rows = table_rows.drop(1)
-
-#
-# Special handling for single-value results
-#
-if headers.length == 1 && data_rows.length == 1
-  puts "\n#{headers.first}: #{data_rows.first.first}"
-else
-  table = Terminal::Table.new(
-    title: named_query,
-    headings: headers,
-    rows: data_rows
-  )
-
-  puts
-  puts table
-end
