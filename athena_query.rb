@@ -11,7 +11,7 @@ STACK_NAME = 'glue-example-workflow'
 QUERY_ID = 'AthenaProcessedCityDataQueryId'
 RESULTS_BUCKET = "s3://#{ENV['STAGING_BUCKET_NAME']}/athena/"
 
-def get_query_from_cloudformation(stack_name:, query_id:)
+def get_query_id_from_cloudformation(stack_name:, query_id:)
   cf = Aws::CloudFormation::Client.new(profile: ENV['AWS_GLUE_EXAMPLE_PROFILE'], region: ENV['AWS_GLUE_EXAMPLE_REGION'])
 
   stack = cf.describe_stacks(
@@ -23,92 +23,93 @@ def get_query_from_cloudformation(stack_name:, query_id:)
                &.output_value
 end
 
-#
-# Get Athena Named Query ID from CloudFormation
-#
-query_id = get_query_from_cloudformation(stack_name: STACK_NAME, query_id: QUERY_ID)
+def execute_query(stack_name:, query_id:)
 
-raise "CloudFormation output '#{QUERY_ID}' not found" unless query_id
+  query_id = get_query_id_from_cloudformation(stack_name: STACK_NAME, query_id: QUERY_ID)
 
-#
-# Retrieve the Named Query
-#
-athena = Aws::Athena::Client.new(profile: ENV['AWS_GLUE_EXAMPLE_PROFILE'], region: ENV['AWS_GLUE_EXAMPLE_REGION'])
+  raise "CloudFormation output '#{QUERY_ID}' not found" unless query_id
 
-named_query = athena.get_named_query(
-  named_query_id: query_id
-).named_query
+  athena = Aws::Athena::Client.new(profile: ENV['AWS_GLUE_EXAMPLE_PROFILE'], region: ENV['AWS_GLUE_EXAMPLE_REGION'])
 
-puts "Executing query: #{named_query.name}"
+  named_query = athena.get_named_query(
+    named_query_id: query_id
+  ).named_query
 
-#
-# Start Query Execution
-#
-execution = athena.start_query_execution(
-  query_string: named_query.query_string,
-  query_execution_context: {
-    database: named_query.database
-  },
-  result_configuration: {
-    output_location: RESULTS_BUCKET
-  }
-)
+  puts "Executing query: #{named_query.name}"
 
-query_execution_id = execution.query_execution_id
-
-puts "Started query execution: #{query_execution_id}"
-
-#
-# Wait for completion
-#
-loop do
-  execution = athena.get_query_execution(
-    query_execution_id: query_execution_id
+  #
+  # Start Query Execution
+  #
+  execution = athena.start_query_execution(
+    query_string: named_query.query_string,
+    query_execution_context: {
+      database: named_query.database
+    },
+    result_configuration: {
+      output_location: RESULTS_BUCKET
+    }
   )
 
-  status = execution.query_execution.status.state
+  query_execution_id = execution.query_execution_id
 
-  case status
-  when 'SUCCEEDED'
-    puts "\nQuery completed successfully."
-    break
-  when 'FAILED'
-    raise <<~ERROR
-      Athena query failed:
-      #{execution.query_execution.status.state_change_reason}
-    ERROR
-  when 'CANCELLED'
-    raise 'Athena query was cancelled.'
-  else
-    print '.'
-    sleep 2
+  puts "Started query execution: #{query_execution_id}"
+
+  #
+  # Wait for completion
+  #
+  loop do
+    execution = athena.get_query_execution(
+      query_execution_id: query_execution_id
+    )
+
+    status = execution.query_execution.status.state
+
+    case status
+    when 'SUCCEEDED'
+      puts "\nQuery completed successfully."
+      break
+    when 'FAILED'
+      raise <<~ERROR
+        Athena query failed:
+        #{execution.query_execution.status.state_change_reason}
+      ERROR
+    when 'CANCELLED'
+      raise 'Athena query was cancelled.'
+    else
+      print '.'
+      sleep 2
+    end
   end
+
+
+  #
+  # Retrieve all result pages
+  #
+  rows = []
+  next_token = nil
+
+  loop do
+    response = athena.get_query_results(
+      query_execution_id: query_execution_id,
+      next_token: next_token
+    )
+
+    rows.concat(response.result_set.rows)
+
+    next_token = response.next_token
+    break unless next_token
+  end
+
+  #
+  # Convert Athena rows to arrays
+  #
+  table_rows = rows.map do |row|
+    row.data.map { |col| col.var_char_value.to_s }
+  end
+  [table_rows, named_query.name]
 end
 
-#
-# Retrieve all result pages
-#
-rows = []
-next_token = nil
-
-loop do
-  response = athena.get_query_results(
-    query_execution_id: query_execution_id,
-    next_token: next_token
-  )
-
-  rows.concat(response.result_set.rows)
-
-  next_token = response.next_token
-  break unless next_token
-end
-
-#
-# Convert Athena rows to arrays
-#
-table_rows = rows.map do |row|
-  row.data.map { |col| col.var_char_value.to_s }
-end
+table_rows, named_query = execute_query(stack_name: STACK_NAME, query_id: QUERY_ID)
 
 if table_rows.empty?
   puts 'No rows returned.'
@@ -128,7 +129,7 @@ if headers.length == 1 && data_rows.length == 1
   puts "\n#{headers.first}: #{data_rows.first.first}"
 else
   table = Terminal::Table.new(
-    title: named_query.name,
+    title: named_query,
     headings: headers,
     rows: data_rows
   )
