@@ -45,6 +45,7 @@ export STAGING_BUCKET_NAME=com-yourcompany-bucket-name
 run `./workflow-create.sh` to create the workflow that will run when triggered.
 
 run `./workflow-feed.sh` that loads data to the `STAGING_BUCKET_NAME` S3 bucket, triggering the workflow.
+Please note that the job won't run unless it's the first time, or if the data is identical to a previous run. This is by design
 
 run `./workflow-delete.sh` to remove everything.
 
