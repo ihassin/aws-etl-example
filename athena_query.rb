@@ -13,21 +13,23 @@ RESULTS_BUCKET = "s3://#{ENV['STAGING_BUCKET_NAME']}/athena/"
 def get_query_id_from_cloudformation(stack_name:, query_id:)
   cf = Aws::CloudFormation::Client.new(profile: ENV['AWS_GLUE_EXAMPLE_PROFILE'], region: ENV['AWS_GLUE_EXAMPLE_REGION'])
 
-  stack = cf.describe_stacks(
-    stack_name: stack_name
-  ).stacks.first
+  begin
+    stack = cf.describe_stacks(
+      stack_name: stack_name
+    ).stacks.first
 
-  query_id = stack.outputs
-                  .find { |o| o.output_key == query_id }
-               &.output_value
+    query_id = stack.outputs
+                    .find { |o| o.output_key == query_id }
+                 &.output_value
+  rescue Exception => ex
+    puts "Sorry: #{ex.message}"
+  end
 end
 
 def execute_query(stack_name:, query_id:)
 
   query_id = get_query_id_from_cloudformation(stack_name: stack_name, query_id: query_id)
-
-  raise "CloudFormation output '#{query_id}' not found" unless query_id
-
+  return nil unless query_id
   athena = Aws::Athena::Client.new(profile: ENV['AWS_GLUE_EXAMPLE_PROFILE'], region: ENV['AWS_GLUE_EXAMPLE_REGION'])
 
   named_query = athena.get_named_query(
@@ -105,7 +107,7 @@ def execute_query(stack_name:, query_id:)
 end
 
 def display_results(table_rows:, named_query:)
-  if table_rows.empty?
+  if table_rows.nil? || table_rows.empty?
     puts 'No rows returned.'
     exit
   end
