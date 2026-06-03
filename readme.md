@@ -76,4 +76,28 @@ Monitor errors [here](https://us-east-1.console.aws.amazon.com/cloudwatch/home?r
 
 # Technotes
 
+## Crawler
+
 Creating a table for the Crawler is not needed as the crawler will create one on its first run.
+
+## ENV parameters
+
+Most are self-explanatory.
+The two below 
+```shell
+PROCESSED_QUERY_ID=AthenaProcessedCityDataQueryId
+RAW_QUERY_ID=AthenaOriginalCityDataQueryId
+
+```
+are from CloudFormation output:
+```yaml
+  AthenaProcessedCityDataQueryId
+    Value: !Ref ProcessedCityDataAthenaNamedQuery
+    Description: Returns the data after transformation
+
+  AthenaOriginalCityDataQueryId:
+    Value: !Ref CityDataAthenaNamedQuery
+    Description: Returns the data prior to transformation
+
+```
+And are used by the `athena_query.rb` script to get to Athena's query IDs based on the CF query object names.
