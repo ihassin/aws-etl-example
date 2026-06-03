@@ -59,27 +59,32 @@ def execute_query(stack_name:, query_id:)
   # Wait for completion
   #
   loop do
-    execution = athena.get_query_execution(
-      query_execution_id: query_execution_id
-    )
+    begin
+      execution = athena.get_query_execution(
+        query_execution_id: query_execution_id
+      )
 
-    status = execution.query_execution.status.state
+      status = execution.query_execution.status.state
 
-    case status
-    when 'SUCCEEDED'
-      puts "\nQuery completed successfully."
-      break
-    when 'FAILED'
-      raise <<~ERROR
-        Athena query failed:
-        #{execution.query_execution.status.state_change_reason}
-      ERROR
-    when 'CANCELLED'
-      raise 'Athena query was cancelled.'
-    else
-      print '.'
-      sleep 2
+      case status
+      when 'SUCCEEDED'
+        puts "\nQuery completed successfully."
+        break
+      when 'FAILED'
+        raise <<~ERROR
+          Athena query failed:
+          #{execution.query_execution.status.state_change_reason}
+        ERROR
+      when 'CANCELLED'
+        raise 'Athena query was cancelled.'
+      else
+        print '.'
+        sleep 2
+      end
+    rescue Exception => ex
+      puts "Sorry: #{ex.message}"
     end
+
   end
 
   rows = []

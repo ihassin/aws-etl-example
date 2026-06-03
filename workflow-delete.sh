@@ -1,5 +1,10 @@
 #!/bin/zsh
 
+
+set -a      # automatically export all variables
+source .env
+set +a
+
 echo "Emptying staging bucket"
 aws s3 rm --profile "$AWS_GLUE_EXAMPLE_PROFILE" --region "$AWS_GLUE_EXAMPLE_REGION" \
   s3://"$STAGING_BUCKET_NAME" --recursive

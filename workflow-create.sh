@@ -1,7 +1,10 @@
 #!/bin/zsh
 
+set -a      # automatically export all variables
+source .env
+set +a
+
 echo "Submitting stack"
-SCRIPT_PATH=scripts
 
 aws cloudformation deploy --template-file glue-example-workflow.yaml --stack-name glue-example-workflow --capabilities CAPABILITY_NAMED_IAM \
 --profile "$AWS_GLUE_EXAMPLE_PROFILE" --region "$AWS_GLUE_EXAMPLE_REGION" \

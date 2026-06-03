@@ -48,6 +48,18 @@ run `./workflow-feed.sh` that loads data to the `STAGING_BUCKET_NAME` S3 bucket,
 
 run `./workflow-delete.sh` to remove everything.
 
+# Monitoring
+
+Monitor the workflow [here](https://us-east-1.console.aws.amazon.com/glue/home?region=us-east-1#/v2/etl-configuration/workflows/view/CityDataWorkflow?activeViewTab=id-tab-history)
+
+Monitor the workflow logs [here](https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#logsV2:log-groups/log-group/$252Faws$252Flambda$252Fstart-glue-workflow)
+
+Monitor the crawler [here](https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#logsV2:log-groups/log-group/$252Faws-glue$252Fcrawlers/log-events/CityDataCrawler)
+
+Monitor jobs [here](https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#logsV2:log-groups/log-group/$252Faws-glue$252Fjobs$252Foutput)
+
+Monitor errors [here](https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#logsV2:log-groups/log-group/$252Faws-glue$252Fjobs$252Ferror)
+
 # Verifying the work manually
 
 ## Parquet files
