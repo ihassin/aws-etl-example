@@ -1,0 +1,167 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Deploy CloudFormation stack whenever the workflow changes is pushed
+
+Parameters:
+  GitHubConnectionArn:
+    Type: String
+    Description: ARN of the CodeStar connection
+    Default: arn:aws:codeconnections:us-east-1:160071257600:connection/aa7a2c36-ab1f-4cec-bf84-4382a9a0d4b8
+
+  GitHubOwner:
+    Type: String
+    Description: GitHub organization or username
+
+  GitHubRepo:
+    Type: String
+    Description: Repository name
+
+  BranchName:
+    Type: String
+    Default: main
+
+  PipelineS3BucketName:
+    Type: String
+
+  PipelineStackName:
+    Type: String
+
+  ETLWorkflowTemplateFile:
+    Type: String
+    Description: The name of the CloudFormation script to submit
+
+Resources:
+  PipelineS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref PipelineS3BucketName
+      NotificationConfiguration:
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
+
+  CloudFormationExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: CFNDeploymentRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - cloudformation.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+
+  CodePipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: PipelineRole
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codepipeline.amazonaws.com
+            Action:
+              - sts:AssumeRole
+
+      Policies:
+        - PolicyName: PipelinePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+
+              - Effect: Allow
+                Action:
+                  - s3:*
+                Resource:
+                  - !GetAtt PipelineS3Bucket.Arn
+                  - !Sub "${PipelineS3Bucket.Arn}/*"
+
+              - Effect: Allow
+                Action:
+                  - codestar-connections:UseConnection
+                Resource: !Ref GitHubConnectionArn
+
+              - Effect: Allow
+                Action:
+                  - cloudformation:*
+                  - iam:PassRole
+                Resource: "*"
+
+  GlueExampleWorkflowDeploymentPipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: GlueExampleWorkflowDeploymentPipeline
+
+      RoleArn: !GetAtt CodePipelineRole.Arn
+
+      ArtifactStore:
+        Type: S3
+        Location: !Ref PipelineS3Bucket
+
+      Stages:
+
+        - Name: Source
+          Actions:
+            - Name: GitHubSource
+
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: '1'
+
+              OutputArtifacts:
+                - Name: SourceOutput
+
+              Configuration:
+                ConnectionArn: !Ref GitHubConnectionArn
+                FullRepositoryId: !Sub "${GitHubOwner}/${GitHubRepo}"
+                BranchName: !Ref BranchName
+                DetectChanges: true
+
+              RunOrder: 1
+
+        - Name: Deploy
+          Actions:
+            - Name: DeployCloudFormation
+
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: '1'
+
+              InputArtifacts:
+                - Name: SourceOutput
+
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                StackName: !Ref PipelineStackName
+                TemplatePath: !Sub "SourceOutput::${ETLWorkflowTemplateFile}"
+                Capabilities: CAPABILITY_NAMED_IAM
+                RoleArn: !GetAtt CloudFormationExecutionRole.Arn
+                ParameterOverrides: |
+                  {
+                    "CityDataBucketName": "${STAGING_BUCKET_NAME}",
+                    "CityDataPath": "city-data",
+                    "CityDBName": "city-data-db",
+                    "CityTableName": "city_data",
+                    "CityDataProcessedTableName": "city-data-processed",
+                    "ParquetPath": "city_data.parquet",
+                    "CityDataFileName": "CityData.csv",
+                    "CityDataETLScriptName": "city_etl.py",
+                    "CityDataDQScriptName": "city_dq.py",
+                    "CityDataProcessedPath": "processed",
+                    "ScriptPath": "${SCRIPT_PATH}"
+                  }
+
+              RunOrder: 1
+
+Outputs:
+  PipelineName:
+    Value: !Ref GlueExampleWorkflowDeploymentPipeline
